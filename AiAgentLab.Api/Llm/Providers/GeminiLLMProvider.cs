@@ -30,44 +30,64 @@ public sealed class GeminiLLMProvider : ILLMProvider
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken cancellationToken = default)
     {
-        var url = $"/v1/models/{_settings.Model}:generate?key={_settings.ApiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_settings.Model}:generateContent";
 
-        var body = new GeminiGenerateRequest
+        var body = new GeminiRequest
         {
-            Prompt = new GeminiPrompt { Text = request.Prompt }
+            Contents =
+            [
+                new GeminiContent
+            {
+                Parts = [new GeminiPart { Text = request.Prompt }]
+            }
+            ]
         };
 
-        _logger.LogInformation("Sending generate request to Gemini model {Model}", _settings.Model);
+        _logger.LogInformation("Gemini request URL: {Url}", url);
+        _logger.LogInformation("Sending generateContent request to Gemini model {Model}", _settings.Model);
 
-        using var httpResponse = await _httpClient.PostAsJsonAsync(url, body, cancellationToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
+        httpRequest.Headers.Add("x-goog-api-key", _settings.ApiKey);
+        httpRequest.Content = JsonContent.Create(body);
+
+        using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
         httpResponse.EnsureSuccessStatusCode();
 
-        var resp = await httpResponse.Content.ReadFromJsonAsync<GeminiGenerateResponse>(cancellationToken)
+        var resp = await httpResponse.Content.ReadFromJsonAsync<GeminiResponse>(cancellationToken)
             ?? throw new InvalidOperationException("Gemini returned an empty response body.");
 
-        var content = resp.Candidates?.FirstOrDefault()?.Content ?? string.Empty;
+        var text = resp.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text
+            ?? string.Empty;
 
         return new LLMResponse
         {
-            Content = content,
+            Content = text,
             Model = _settings.Model,
             Provider = Name
         };
     }
 
-    private sealed record GeminiGenerateRequest
+    // --- Gemini wire models (provider-specific, kept private to this file) ---
+
+    private sealed record GeminiRequest
     {
-        [JsonPropertyName("prompt")]
-        public GeminiPrompt Prompt { get; init; } = null!;
+        [JsonPropertyName("contents")]
+        public required IReadOnlyList<GeminiContent> Contents { get; init; }
     }
 
-    private sealed record GeminiPrompt
+    private sealed record GeminiContent
+    {
+        [JsonPropertyName("parts")]
+        public required IReadOnlyList<GeminiPart> Parts { get; init; }
+    }
+
+    private sealed record GeminiPart
     {
         [JsonPropertyName("text")]
         public required string Text { get; init; }
     }
 
-    private sealed record GeminiGenerateResponse
+    private sealed record GeminiResponse
     {
         [JsonPropertyName("candidates")]
         public GeminiCandidate[]? Candidates { get; init; }
@@ -76,6 +96,6 @@ public sealed class GeminiLLMProvider : ILLMProvider
     private sealed record GeminiCandidate
     {
         [JsonPropertyName("content")]
-        public string? Content { get; init; }
+        public GeminiContent? Content { get; init; }
     }
 }

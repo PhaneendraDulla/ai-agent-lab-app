@@ -12,5 +12,5 @@ public sealed class LlmSettings
     /// Which provider to use, e.g. "Ollama" or "Mock". Matched case-insensitively
     /// by the provider factory.
     /// </summary>
-    public string Provider { get; set; } = "Ollama";
+    public string Provider { get; set; } = "Gemini";
 }
