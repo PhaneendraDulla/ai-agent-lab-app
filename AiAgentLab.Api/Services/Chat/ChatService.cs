@@ -36,7 +36,7 @@ public sealed class ChatService : IChatService
             conversation = new ConversationDto
             {
                 Id = conversationId,
-                UserId = request.UserId ?? "unknown",
+                UserId = request.UserId ?? 0,   // 0 = anonymous; real users start at 1
                 CreatedAt = DateTime.UtcNow,
                 LastMessageAt = DateTime.UtcNow,
                 Messages = new List<MessageDto>()
@@ -44,7 +44,7 @@ public sealed class ChatService : IChatService
 
             await _conversationRepository.SaveConversationAsync(conversation, cancellationToken);
         }
-        
+
         // 2. Build context from history (last N messages to fit token budget)
         var contextMessages = BuildContextWindow(conversation.Messages, maxMessages: 10);
 

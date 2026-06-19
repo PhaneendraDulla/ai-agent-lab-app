@@ -7,14 +7,13 @@ public sealed record ChatRequest
 {
     /// <summary>The user's message to send to the model.</summary>
     [Required(AllowEmptyStrings = false)]
-    public required string Message { get; init; }
+    public string Message { get; init; }  = string.Empty;
 
     /// <summary>Identifies the conversation. If null, server generates a new ID.</summary>
     public string? ConversationId { get; init; }
 
-    /// <summary>User identifier (required for tracking conversation ownership).</summary>
-    [Required(AllowEmptyStrings = false)]
-    public required string UserId { get; init; }
+    /// <summary>User identifier.</summary>
+    public required int? UserId { get; init; }
 
     /// <summary>Optional user intent metadata for classification and analytics.</summary>
     public Dictionary<string, string>? Intent { get; init; }

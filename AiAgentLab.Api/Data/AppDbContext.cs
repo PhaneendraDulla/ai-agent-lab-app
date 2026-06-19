@@ -22,7 +22,7 @@ public sealed class AppDbContext : DbContext
         {
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedNever();
-            b.Property(e => e.UserId).IsRequired().HasMaxLength(256);
+            b.Property(e => e.UserId).IsRequired();
             b.Property(e => e.CreatedAt).IsRequired();
             b.Property(e => e.UpdatedAt).IsRequired();
             b.HasMany(e => e.Messages)

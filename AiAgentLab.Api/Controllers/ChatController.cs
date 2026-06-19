@@ -31,44 +31,43 @@ public sealed class ChatController : ControllerBase
 
     /// <summary>Retrieve conversation history (last 20 messages).</summary>
     [HttpGet("{conversationId}")]
-    public async Task<ActionResult<ConversationHistoryResponse>> GetConversation(
-        string conversationId,
-        [FromQuery] string userId,
-        CancellationToken cancellationToken)
+public async Task<ActionResult<ConversationHistoryResponse>> GetConversation(
+    string conversationId,
+    [FromQuery] int userId,              // was: string userId
+    CancellationToken cancellationToken)
+{
+    var conversation = await _conversationRepository.GetConversationAsync(conversationId, cancellationToken);
+
+    if (conversation == null)
+        return NotFound(new { error = "Conversation not found" });
+
+    if (conversation.UserId != userId)
+        return Forbid();
+
+    var recentMessages = conversation.Messages.TakeLast(20).ToList();
+
+    return Ok(new ConversationHistoryResponse
     {
-        var conversation = await _conversationRepository.GetConversationAsync(conversationId, cancellationToken);
-
-        if (conversation == null)
-            return NotFound(new { error = "Conversation not found" });
-
-        if (conversation.UserId != userId)
-            return Forbid();  // User can only see their own conversations
-
-        // Return last 20 messages
-        var recentMessages = conversation.Messages.TakeLast(20).ToList();
-
-        return Ok(new ConversationHistoryResponse
+        ConversationId = conversation.Id,
+        UserId = conversation.UserId,
+        CreatedAt = conversation.CreatedAt,
+        LastMessageAt = conversation.LastMessageAt,
+        Messages = recentMessages.Select(m => new MessageSummary
         {
-            ConversationId = conversation.Id,
-            UserId = conversation.UserId,
-            CreatedAt = conversation.CreatedAt,
-            LastMessageAt = conversation.LastMessageAt,
-            Messages = recentMessages.Select(m => new MessageSummary
-            {
-                Id = m.Id,
-                Role = m.Role,
-                Content = m.Content,
-                CreatedAt = m.CreatedAt
-            }).ToList()
-        });
-    }
+            Id = m.Id,
+            Role = m.Role,
+            Content = m.Content,
+            CreatedAt = m.CreatedAt
+        }).ToList()
+    });
+}
 }
 
 /// <summary>Response for GET /api/chat/{conversationId}.</summary>
 public sealed record ConversationHistoryResponse
 {
     public required string ConversationId { get; init; }
-    public required string UserId { get; init; }
+    public required int UserId { get; init; }
     public required DateTime CreatedAt { get; init; }
     public required DateTime LastMessageAt { get; init; }
     public required List<MessageSummary> Messages { get; init; }

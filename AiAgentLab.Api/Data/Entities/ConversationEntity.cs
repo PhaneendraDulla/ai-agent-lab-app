@@ -9,7 +9,7 @@ public class ConversationEntity
     // Primary key for the conversation
     public string Id { get; set; } = null!;
     // Identifier for the user who owns this conversation
-    public string UserId { get; set; } = null!;
+    public int UserId { get; set; }
     // Timestamp when the conversation was created
     public DateTime CreatedAt { get; set; }
     // Timestamp when the conversation was last updated (e.g., when a new message is added)

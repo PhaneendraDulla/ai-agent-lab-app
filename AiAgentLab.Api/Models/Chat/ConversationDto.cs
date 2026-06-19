@@ -9,7 +9,7 @@ public sealed record ConversationDto
     /// <summary>A unique identifier for the conversation.</summary>
     public required string Id { get; init; }
     /// <summary>The ID of the user who owns this conversation.</summary>
-    public required string UserId { get; init; }
+    public required int UserId { get; init; }
     /// <summary>The timestamp when the conversation was created.</summary>
     public required DateTime CreatedAt { get; init; }
     /// <summary>The timestamp when the last message was added to the conversation.</summary>

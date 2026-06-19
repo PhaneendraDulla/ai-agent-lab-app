@@ -18,7 +18,11 @@ public sealed class ChatControllerTests : IClassFixture<MockProviderWebApplicati
     {
         var client = _factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/chat", new ChatRequest { Message = "hello" });
+        var response = await client.PostAsJsonAsync("/api/chat", new ChatRequest
+        {
+            Message = "hello",
+            UserId = 1
+        });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
