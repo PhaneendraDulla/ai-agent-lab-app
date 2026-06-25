@@ -25,7 +25,7 @@ public sealed class FakeLLMProvider : ILLMProvider
 
         var response = new LLMResponse
         {
-            Content = _cannedContent,
+            Text = _cannedContent,
             Model = "fake-model",
             Provider = Name
         };

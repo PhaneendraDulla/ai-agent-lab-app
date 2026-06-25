@@ -4,8 +4,9 @@ using AiAgentLab.Api.Llm.Abstractions;
 using AiAgentLab.Api.Llm.Factory;
 using AiAgentLab.Api.Llm.Providers;
 using AiAgentLab.Api.Services.Chat;
-using Microsoft.Extensions.Options;
 using AiAgentLab.Api.Data;
+using AiAgentLab.Api.Tools;
+using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -49,6 +50,11 @@ builder.Services.AddScoped<IIntentClassifier, NoOpIntentClassifier>();
 // The active provider is chosen by configuration via the factory.
 builder.Services.AddSingleton<ILLMProviderFactory, LLMProviderFactory>();
 builder.Services.AddScoped<ILLMProvider>(sp => sp.GetRequiredService<ILLMProviderFactory>().Create());
+
+// Register tools and registry for tool execution loop
+builder.Services.AddSingleton<ITool, GetCurrentDateTool>();
+builder.Services.AddSingleton<ITool, GetStockPriceTool>();
+builder.Services.AddSingleton<IToolRegistry, ToolRegistry>();
 
 // --- Application services ---
 builder.Services.AddScoped<IChatService, ChatService>();

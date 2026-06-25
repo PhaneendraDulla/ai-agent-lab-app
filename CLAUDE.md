@@ -69,8 +69,8 @@ ASP.NET Core Web API backend with:
 
 ### Milestone 2
 
-* Tool execution loop
 * Conversation memory
+* Tool execution loop
 * Local document ingestion
 * Embeddings
 * Vector database

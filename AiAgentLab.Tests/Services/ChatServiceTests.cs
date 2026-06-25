@@ -39,6 +39,6 @@ public sealed class ChatServiceTests
         await service.SendAsync(new ChatRequest { Message = "hello", UserId = 1 });
 
         Assert.NotNull(provider.LastRequest);
-        Assert.Contains("hello", provider.LastRequest!.Prompt);
+        Assert.Contains(provider.LastRequest!.Messages, m => m.Content.Contains("hello"));
     }
 }

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Linq;
 using System.Text.Json.Serialization;
 using AiAgentLab.Api.Core.Configuration;
 using AiAgentLab.Api.Llm.Abstractions;
@@ -31,11 +32,14 @@ public sealed class OllamaLLMProvider : ILLMProvider
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken cancellationToken = default)
     {
+        // Map provider-agnostic messages to Ollama's message shape
+        var mappedMessages = request.Messages.Select(m => new OllamaMessage { Role = m.Role, Content = m.Content }).ToList();
+
         var ollamaRequest = new OllamaChatRequest
         {
             Model = _settings.Model,
             Stream = false,
-            Messages = [new OllamaMessage { Role = "user", Content = request.Prompt }]
+            Messages = mappedMessages
         };
 
         _logger.LogInformation("Sending chat request to Ollama model {Model}", _settings.Model);
@@ -48,7 +52,7 @@ public sealed class OllamaLLMProvider : ILLMProvider
 
         return new LLMResponse
         {
-            Content = ollamaResponse.Message?.Content ?? string.Empty,
+            Text = ollamaResponse.Message?.Content ?? string.Empty,
             Model = ollamaResponse.Model ?? _settings.Model,
             Provider = Name
         };

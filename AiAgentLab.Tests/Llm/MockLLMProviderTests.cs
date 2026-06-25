@@ -10,10 +10,10 @@ public sealed class MockLLMProviderTests
     {
         var provider = new MockLLMProvider();
 
-        var response = await provider.GenerateAsync(new LLMRequest { Prompt = "ping" });
+        var response = await provider.GenerateAsync(new LLMRequest { Messages = new[] { new LLMMessage { Role = "user", Content = "ping" } } });
 
         Assert.Equal("Mock", provider.Name);
         Assert.Equal("Mock", response.Provider);
-        Assert.Contains("ping", response.Content);
+        Assert.Contains("ping", response.Text);
     }
 }

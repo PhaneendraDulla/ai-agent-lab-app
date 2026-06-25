@@ -1,4 +1,5 @@
 using AiAgentLab.Api.Llm.Abstractions;
+using System.Linq;
 
 namespace AiAgentLab.Api.Llm.Providers;
 
@@ -12,9 +13,11 @@ public sealed class MockLLMProvider : ILLMProvider
 
     public Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken cancellationToken = default)
     {
+        // Build a simple text response from the incoming messages for deterministic behavior in tests
+        var joined = string.Join(" | ", request.Messages.Select(m => $"{m.Role}: {m.Content}"));
         var response = new LLMResponse
         {
-            Content = $"[mock] You said: {request.Prompt}",
+            Text = $"[mock] You said: {joined}",
             Model = "mock",
             Provider = Name
         };
