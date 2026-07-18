@@ -39,13 +39,16 @@ public sealed class ConversationRepository : IConversationRepository
 
     public async Task SaveConversationAsync(ConversationDto conversation, CancellationToken cancellationToken = default)
     {
+        var safeUserId = conversation.UserId > 0 ? conversation.UserId : 1;
+        await EnsureDefaultUserExistsAsync(cancellationToken);
+
         var existing = await _ctx.Conversations.FindAsync(new object[] { conversation.Id }, cancellationToken);
         if (existing == null)
         {
             _ctx.Conversations.Add(new ConversationEntity
             {
                 Id = conversation.Id,
-                UserId = conversation.UserId,
+                UserId = safeUserId,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.LastMessageAt
             });
@@ -55,6 +58,17 @@ public sealed class ConversationRepository : IConversationRepository
             existing.UpdatedAt = conversation.LastMessageAt;
         }
         await _ctx.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureDefaultUserExistsAsync(CancellationToken cancellationToken)
+    {
+        await _ctx.Database.ExecuteSqlRawAsync(
+            "IF NOT EXISTS (SELECT 1 FROM dbo.Users WHERE Id = 1) " +
+            "BEGIN " +
+            "INSERT INTO dbo.Users (Username, Email, DisplayName, ProviderId, IsActive, CreatedAt, LastSeenAt) " +
+            "VALUES ('system-user', NULL, 'System User', 'local-dev', 1, SYSUTCDATETIME(), SYSUTCDATETIME()); " +
+            "END",
+            cancellationToken);
     }
 
     public async Task AddMessageAsync(string conversationId, MessageDto message, CancellationToken cancellationToken = default)

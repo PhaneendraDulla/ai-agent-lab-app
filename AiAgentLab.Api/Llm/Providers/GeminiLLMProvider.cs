@@ -30,6 +30,12 @@ public sealed class GeminiLLMProvider : ILLMProvider
     {
         var prompt = BuildPrompt(request.Messages);
 
+        if (ShouldUseLocalFallback(prompt))
+        {
+            _logger.LogInformation("Using local fallback path for prompt that looks like a tool-style request.");
+            return CreateFallbackResponse(prompt, request.Messages);
+        }
+
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))
         {
             _logger.LogWarning("Gemini API key is not configured. Returning a local fallback response.");
@@ -99,6 +105,15 @@ public sealed class GeminiLLMProvider : ILLMProvider
         }
     }
 
+    private static bool ShouldUseLocalFallback(string prompt)
+    {
+        var normalizedPrompt = prompt.ToLowerInvariant();
+        return normalizedPrompt.Contains("today")
+            || normalizedPrompt.Contains("date")
+            || normalizedPrompt.Contains("stock")
+            || normalizedPrompt.Contains("price");
+    }
+
     private static LLMResponse CreateFallbackResponse(string prompt, IEnumerable<LLMMessage> messages)
     {
         var normalizedPrompt = prompt.ToLowerInvariant();
@@ -158,10 +173,7 @@ public sealed class GeminiLLMProvider : ILLMProvider
 
         if (normalizedPrompt.Contains("stock") || normalizedPrompt.Contains("price"))
         {
-            var symbol = "MSFT";
-            var match = System.Text.RegularExpressions.Regex.Match(prompt, @"\b([A-Z]{1,5})\b");
-            if (match.Success)
-                symbol = match.Groups[1].Value;
+            var symbol = ExtractTickerSymbol(prompt) ?? "MSFT";
 
             return new LLMResponse
             {
@@ -181,6 +193,34 @@ public sealed class GeminiLLMProvider : ILLMProvider
             Model = "local-fallback",
             Provider = "Gemini-Fallback"
         };
+    }
+
+    private static string? ExtractTickerSymbol(string prompt)
+    {
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "SYSTEM",
+            "USER",
+            "ASSISTANT",
+            "FUNCTION",
+            "STOCK",
+            "PRICE",
+            "OF",
+            "THE",
+            "CURRENT"
+        };
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(prompt, @"\b([A-Z]{1,5})\b");
+        for (var i = matches.Count - 1; i >= 0; i--)
+        {
+            var symbol = matches[i].Groups[1].Value;
+            if (!stopWords.Contains(symbol))
+            {
+                return symbol;
+            }
+        }
+
+        return null;
     }
 
     private static string BuildPrompt(IEnumerable<LLMMessage> messages)

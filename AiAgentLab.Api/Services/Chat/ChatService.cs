@@ -48,7 +48,7 @@ public sealed class ChatService : IChatService
             conversation = new ConversationDto
             {
                 Id = conversationId,
-                UserId = request.UserId ?? 0,
+                UserId = request.UserId ?? 1,
                 CreatedAt = DateTime.UtcNow,
                 LastMessageAt = DateTime.UtcNow,
                 Messages = new List<MessageDto>()
@@ -130,6 +130,39 @@ public sealed class ChatService : IChatService
                 // Execute tool via registry
                 var toolResult = await _toolRegistry.ExecuteAsync(toolCall.Name, toolCall.Args, cancellationToken);
 
+                if (llmResponse.Provider == "Gemini-Fallback" && llmResponse.Model == "local-fallback")
+                {
+                    var answer = FormatToolResult(toolResult);
+                    await _conversationRepository.AddMessageAsync(conversationId, new MessageDto
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ConversationId = conversationId,
+                        Role = "user",
+                        Content = request.Message,
+                        CreatedAt = DateTime.UtcNow,
+                        Metadata = intent
+                    }, cancellationToken);
+
+                    await _conversationRepository.AddMessageAsync(conversationId, new MessageDto
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ConversationId = conversationId,
+                        Role = "assistant",
+                        Content = answer,
+                        CreatedAt = DateTime.UtcNow,
+                        Metadata = new() { { "provider", llmResponse.Provider ?? "unknown" } }
+                    }, cancellationToken);
+
+                    return new ChatResponse
+                    {
+                        Answer = answer,
+                        ConversationId = conversationId,
+                        MessageId = Guid.NewGuid().ToString(),
+                        Provider = llmResponse.Provider,
+                        Model = llmResponse.Model
+                    };
+                }
+
                 // Add assistant's function_call representation to messages (for continuity)
                 messages.Add(new LLMMessage
                 {
@@ -181,6 +214,31 @@ public sealed class ChatService : IChatService
             { "confidence", classification.Confidence.ToString("F2") },
             { "classifier", classification.Metadata?.GetValueOrDefault("classifier") ?? "unknown" }
         };
+    }
+
+    private static string FormatToolResult(JsonElement toolResult)
+    {
+        if (toolResult.ValueKind == JsonValueKind.Object)
+        {
+            if (toolResult.TryGetProperty("currentDateTime", out var dateValue))
+            {
+                return $"The current date and time is {dateValue.GetString()}";
+            }
+
+            if (toolResult.TryGetProperty("price", out var priceValue))
+            {
+                var symbol = toolResult.TryGetProperty("symbol", out var symbolValue)
+                    ? symbolValue.GetString() ?? "UNKNOWN"
+                    : "UNKNOWN";
+                var currency = toolResult.TryGetProperty("currency", out var currencyValue)
+                    ? currencyValue.GetString() ?? "USD"
+                    : "USD";
+
+                return $"{symbol} is currently priced at {priceValue.GetDecimal():0.00} {currency}.";
+            }
+        }
+
+        return toolResult.ToString();
     }
 
     private List<MessageDto> BuildContextWindow(List<MessageDto> messages, int maxMessages)
