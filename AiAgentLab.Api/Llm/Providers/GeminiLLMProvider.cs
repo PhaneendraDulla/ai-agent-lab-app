@@ -46,9 +46,6 @@ public sealed class GeminiLLMProvider : ILLMProvider
             }
         };
 
-        if (request.ToolDeclarations is { Count: > 0 })
-            body["tools"] = request.ToolDeclarations;
-
         _logger.LogInformation("Gemini request URL: {Url}", url);
         _logger.LogInformation("Sending generateContent request to Gemini model {Model}", _settings.Model);
 

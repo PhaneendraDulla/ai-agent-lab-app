@@ -13,7 +13,7 @@ public sealed record ChatRequest
     public string? ConversationId { get; init; }
 
     /// <summary>User identifier.</summary>
-    public required int? UserId { get; init; }
+    public int? UserId { get; init; }
 
     /// <summary>Optional user intent metadata for classification and analytics.</summary>
     public Dictionary<string, string>? Intent { get; init; }

@@ -15,6 +15,9 @@ public static class StartupLogger
         var llm = app.Services.GetRequiredService<IOptions<LlmSettings>>().Value;
         var ollama = app.Services.GetRequiredService<IOptions<OllamaSettings>>().Value;
 
+        var gemini = app.Services.GetRequiredService<IOptions<GeminiSettings>>().Value;
+        logger.LogInformation("Gemini API key configured: {HasKey}", !string.IsNullOrWhiteSpace(gemini.ApiKey));
+        
         logger.LogInformation("AiAgentLab.Api starting. Provider={Provider}", llm.Provider);
 
         if (string.Equals(llm.Provider, "Ollama", StringComparison.OrdinalIgnoreCase))
