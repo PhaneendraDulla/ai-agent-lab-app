@@ -28,32 +28,23 @@ public sealed class GeminiLLMProvider : ILLMProvider
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken cancellationToken = default)
     {
-        var prompt = BuildPrompt(request.Messages);
-
-        if (ShouldUseLocalFallback(prompt))
-        {
-            _logger.LogInformation("Using local fallback path for prompt that looks like a tool-style request.");
-            return CreateFallbackResponse(prompt, request.Messages);
-        }
-
+        // Without an API key we can't talk to Gemini, so fall back to the offline demo path.
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))
         {
             _logger.LogWarning("Gemini API key is not configured. Returning a local fallback response.");
-            return CreateFallbackResponse(prompt, request.Messages);
+            return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_settings.Model}:generateContent";
 
-        var body = new Dictionary<string, object?>
-        {
-            ["contents"] = new[]
-            {
-                new { parts = new[] { new { text = prompt } } }
-            }
-        };
+        // Real tool calling: send the conversation AND the tool declarations so Gemini
+        // itself decides whether to call a tool or answer directly.
+        var body = BuildRequestBody(request);
 
-        _logger.LogInformation("Gemini request URL: {Url}", url);
-        _logger.LogInformation("Sending generateContent request to Gemini model {Model}", _settings.Model);
+        _logger.LogInformation(
+            "Sending generateContent request to Gemini model {Model} with {ToolCount} tool declaration(s)",
+            _settings.Model,
+            request.ToolDeclarations?.Count ?? 0);
 
         try
         {
@@ -96,22 +87,101 @@ public sealed class GeminiLLMProvider : ILLMProvider
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "Gemini request failed. Returning a local fallback response.");
-            return CreateFallbackResponse(prompt, request.Messages);
+            return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
         catch (TaskCanceledException ex)
         {
             _logger.LogWarning(ex, "Gemini request timed out. Returning a local fallback response.");
-            return CreateFallbackResponse(prompt, request.Messages);
+            return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
     }
 
-    private static bool ShouldUseLocalFallback(string prompt)
+    // Builds the Gemini generateContent body from the conversation.
+    // Converts our neutral LLMMessage list into Gemini's structured "contents"
+    // (roles user/model, functionCall, functionResponse) and attaches the tool
+    // declarations so Gemini can choose to call a tool.
+    private static Dictionary<string, object?> BuildRequestBody(LLMRequest request)
     {
-        var normalizedPrompt = prompt.ToLowerInvariant();
-        return normalizedPrompt.Contains("today")
-            || normalizedPrompt.Contains("date")
-            || normalizedPrompt.Contains("stock")
-            || normalizedPrompt.Contains("price");
+        var contents = new List<object>();
+        string? systemInstruction = null;
+
+        foreach (var message in request.Messages)
+        {
+            switch (message.Role)
+            {
+                case "system":
+                    // Gemini takes the system prompt in a separate field, not in contents.
+                    systemInstruction = message.Content;
+                    break;
+
+                case "user":
+                    contents.Add(new { role = "user", parts = new object[] { new { text = message.Content } } });
+                    break;
+
+                // An assistant message with a Name represents a tool call Gemini made earlier.
+                // We echo it back as a model functionCall so the conversation stays consistent.
+                case "assistant" when !string.IsNullOrWhiteSpace(message.Name):
+                    contents.Add(new
+                    {
+                        role = "model",
+                        parts = new object[]
+                        {
+                            new { functionCall = new { name = message.Name, args = ParseJsonOrEmpty(message.Content) } }
+                        }
+                    });
+                    break;
+
+                case "assistant":
+                    contents.Add(new { role = "model", parts = new object[] { new { text = message.Content } } });
+                    break;
+
+                // The result of running a tool, fed back so Gemini can phrase the final answer.
+                case "function":
+                    contents.Add(new
+                    {
+                        role = "user",
+                        parts = new object[]
+                        {
+                            new { functionResponse = new { name = message.Name, response = ParseJsonOrEmpty(message.Content) } }
+                        }
+                    });
+                    break;
+            }
+        }
+
+        var body = new Dictionary<string, object?>
+        {
+            ["contents"] = contents
+        };
+
+        if (request.ToolDeclarations is { Count: > 0 })
+        {
+            // Gemini expects tools grouped under a single "functionDeclarations" array.
+            body["tools"] = new object[] { new { functionDeclarations = request.ToolDeclarations } };
+        }
+
+        if (!string.IsNullOrWhiteSpace(systemInstruction))
+        {
+            body["systemInstruction"] = new { parts = new object[] { new { text = systemInstruction } } };
+        }
+
+        return body;
+    }
+
+    // Parses a JSON string into a JsonElement, returning an empty object for null/invalid input.
+    private static JsonElement ParseJsonOrEmpty(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return JsonDocument.Parse("{}").RootElement.Clone();
+
+        try
+        {
+            return JsonDocument.Parse(content).RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.SerializeToElement(new { value = content });
+        }
     }
 
     private static LLMResponse CreateFallbackResponse(string prompt, IEnumerable<LLMMessage> messages)
@@ -317,8 +387,8 @@ public sealed class GeminiLLMProvider : ILLMProvider
         [JsonPropertyName("name")]
         public string? Name { get; init; }
 
-        // We want the raw JSON for args:
-        [JsonPropertyName("arguments")]
+        // Gemini returns the call arguments under "args" (not "arguments").
+        [JsonPropertyName("args")]
         public JsonElement? Args { get; init; }
     }
 }

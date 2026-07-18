@@ -88,7 +88,8 @@ public sealed class ChatService : IChatService
 
             if (llmResponse.HasText)
             {
-                _logger.LogInformation("Gemini returned text.");
+                _logger.LogInformation(
+                    "DECISION (iteration {Iter}): Gemini answered directly — no tool needed.", i + 1);
                 var assistantText = llmResponse.Text!;
 
                 // Save messages to conversation history
@@ -125,7 +126,9 @@ public sealed class ChatService : IChatService
             if (llmResponse.HasToolCall)
             {
                 var toolCall = llmResponse.ToolCall!;
-                _logger.LogInformation("LLM requested tool {ToolName}", toolCall.Name);
+                _logger.LogInformation(
+                    "DECISION (iteration {Iter}): Gemini chose to call tool '{ToolName}' with args {Args}.",
+                    i + 1, toolCall.Name, toolCall.Args.ToString());
 
                 // Execute tool via registry
                 var toolResult = await _toolRegistry.ExecuteAsync(toolCall.Name, toolCall.Args, cancellationToken);
@@ -163,12 +166,14 @@ public sealed class ChatService : IChatService
                     };
                 }
 
-                // Add assistant's function_call representation to messages (for continuity)
+                // Add assistant's function_call representation to messages (for continuity).
+                // Store the call arguments as JSON so the provider can echo the functionCall
+                // back to Gemini on the next turn.
                 messages.Add(new LLMMessage
                 {
                     Role = "assistant",
                     Name = toolCall.Name,
-                    Content = "" // content empty for function call; args tracked in functionResponses
+                    Content = toolCall.Args.ToString()
                 });
 
                 // Add function response to messages and to the functionResponses list sent back to LLM
