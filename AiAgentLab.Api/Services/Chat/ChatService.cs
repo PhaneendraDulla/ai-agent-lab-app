@@ -72,6 +72,10 @@ public sealed class ChatService : IChatService
         // Tool loop
         var functionResponses = new List<JsonElement>();
 
+        // Track which tools (if any) the model actually invoked during this request,
+        // so we can log a single clear summary before returning.
+        var toolsInvoked = new List<string>();
+
         for (var i = 0; i < MaxToolIterations; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -90,6 +94,7 @@ public sealed class ChatService : IChatService
             {
                 _logger.LogInformation(
                     "DECISION (iteration {Iter}): Gemini answered directly — no tool needed.", i + 1);
+                LogToolSummary(conversationId, toolsInvoked);
                 var assistantText = llmResponse.Text!;
 
                 // Save messages to conversation history
@@ -126,6 +131,7 @@ public sealed class ChatService : IChatService
             if (llmResponse.HasToolCall)
             {
                 var toolCall = llmResponse.ToolCall!;
+                toolsInvoked.Add(toolCall.Name);
                 _logger.LogInformation(
                     "DECISION (iteration {Iter}): Gemini chose to call tool '{ToolName}' with args {Args}.",
                     i + 1, toolCall.Name, toolCall.Args.ToString());
@@ -135,6 +141,7 @@ public sealed class ChatService : IChatService
 
                 if (llmResponse.Provider == "Gemini-Fallback" && llmResponse.Model == "local-fallback")
                 {
+                    LogToolSummary(conversationId, toolsInvoked);
                     var answer = FormatToolResult(toolResult);
                     await _conversationRepository.AddMessageAsync(conversationId, new MessageDto
                     {
@@ -195,6 +202,7 @@ public sealed class ChatService : IChatService
         }
 
         _logger.LogWarning("Max tool iterations exceeded.");
+        LogToolSummary(conversationId, toolsInvoked);
         return new ChatResponse
         {
             Answer = "I'm sorry — I couldn't complete the request after multiple attempts.",
@@ -219,6 +227,22 @@ public sealed class ChatService : IChatService
             { "confidence", classification.Confidence.ToString("F2") },
             { "classifier", classification.Metadata?.GetValueOrDefault("classifier") ?? "unknown" }
         };
+    }
+
+    // Emits a single, easy-to-scan summary of whether any tool was hit during the request.
+    private void LogToolSummary(string conversationId, List<string> toolsInvoked)
+    {
+        if (toolsInvoked.Count == 0)
+        {
+            _logger.LogInformation(
+                "TOOL SUMMARY (conversation {ConversationId}): no tools were used.", conversationId);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "TOOL SUMMARY (conversation {ConversationId}): {ToolCount} tool call(s) — {Tools}.",
+                conversationId, toolsInvoked.Count, string.Join(", ", toolsInvoked));
+        }
     }
 
     private static string FormatToolResult(JsonElement toolResult)

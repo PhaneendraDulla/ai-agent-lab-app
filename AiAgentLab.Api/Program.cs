@@ -16,6 +16,7 @@ builder.Services.Configure<AppSettings>(builder.Configuration.GetSection(AppSett
 builder.Services.Configure<LlmSettings>(builder.Configuration.GetSection(LlmSettings.SectionName));
 builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
 builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection(GeminiSettings.SectionName));
+builder.Services.Configure<FinnhubSettings>(builder.Configuration.GetSection(FinnhubSettings.SectionName));
 
 // --- Database (SQL Server via EF Core) ---
 var connectionString = builder.Configuration.GetConnectionString("AiAgentLab")
@@ -54,6 +55,21 @@ builder.Services.AddScoped<ILLMProvider>(sp => sp.GetRequiredService<ILLMProvide
 // Register tools and registry for tool execution loop
 builder.Services.AddSingleton<ITool, GetCurrentDateTool>();
 builder.Services.AddSingleton<ITool, GetStockPriceTool>();
+
+// Live stock-price tool backed by the Finnhub online API.
+// Uses a typed HttpClient (same pattern as the HTTP-based LLM providers).
+builder.Services.AddHttpClient<GetStockPriceFromFinnhubTool>((serviceProvider, client) =>
+{
+    var settings = serviceProvider.GetRequiredService<IOptions<FinnhubSettings>>().Value;
+
+    // A trailing slash is required so relative request paths (e.g. "quote?...") resolve correctly.
+    var baseUrl = settings.BaseUrl.EndsWith('/') ? settings.BaseUrl : settings.BaseUrl + "/";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+});
+// Expose the typed-client tool through the shared ITool abstraction used by the registry.
+builder.Services.AddSingleton<ITool>(sp => sp.GetRequiredService<GetStockPriceFromFinnhubTool>());
+
 builder.Services.AddSingleton<IToolRegistry, ToolRegistry>();
 
 // --- Application services ---
