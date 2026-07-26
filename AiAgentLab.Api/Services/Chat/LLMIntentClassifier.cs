@@ -47,13 +47,18 @@ public sealed class LLMIntentClassifier : IIntentClassifier
 
             // A couple of recent turns is enough to disambiguate follow-ups like
             // "what about the second one" without blowing up the classification prompt.
+            var historyIncluded = 0;
             if (conversationHistory is { Count: > 0 })
             {
                 foreach (var historyMessage in conversationHistory.TakeLast(4))
                 {
                     messages.Add(new LLMMessage { Role = historyMessage.Role, Content = historyMessage.Content });
+                    historyIncluded++;
                 }
             }
+
+            _logger.LogInformation(
+                "INTENT: including {Count} prior message(s) in classification prompt.", historyIncluded);
 
             messages.Add(new LLMMessage { Role = "user", Content = message });
 
@@ -62,14 +67,19 @@ public sealed class LLMIntentClassifier : IIntentClassifier
 
             var result = ParseResult(response.Text);
             if (result is not null)
+            {
+                _logger.LogInformation(
+                    "INTENT: classified as {Domain}/{Action} (confidence {Confidence}).",
+                    result.Domain, result.Action, result.Confidence);
                 return result;
+            }
 
             _logger.LogWarning(
-                "LLM intent classifier could not parse a JSON result from the model response. Falling back to generic intent.");
+                "INTENT FALLBACK: could not parse a JSON result from the model response. Falling back to generic intent.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "LLM intent classification failed. Falling back to generic intent.");
+            _logger.LogWarning(ex, "INTENT FALLBACK: classification call failed. Falling back to generic intent.");
         }
 
         return new IntentClassifierResult

@@ -29,21 +29,21 @@ namespace AiAgentLab.Api.Tools
             if (!_byName.TryGetValue(name, out var tool))
             {
                 var err = new { error = "tool_not_found", name };
-                _logger.LogWarning("Tool not found: {ToolName}", name);
+                _logger.LogWarning("TOOL: not found: {ToolName}", name);
                 return JsonSerializer.SerializeToElement(err);
             }
 
-            _logger.LogInformation("Executing tool {ToolName}", name);
+            _logger.LogInformation("TOOL: executing {ToolName}", name);
             try
             {
                 var res = await tool.ExecuteAsync(args, cancellationToken);
-                _logger.LogInformation("Tool {ToolName} completed", name);
+                _logger.LogInformation("TOOL: {ToolName} completed", name);
                 return res;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Tool {ToolName} failed", name);
+                _logger.LogError(ex, "TOOL: {ToolName} failed", name);
                 var err = new { error = "tool_error", name, message = ex.Message };
                 return JsonSerializer.SerializeToElement(err);
             }

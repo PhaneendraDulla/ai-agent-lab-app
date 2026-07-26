@@ -8,8 +8,18 @@ using AiAgentLab.Api.Data;
 using AiAgentLab.Api.Tools;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// --- Structured logging (Serilog) ---
+// Reads sinks/levels from the "Serilog" section in appsettings.json so behavior
+// stays config-driven; Console for local dev, a rolling file for anything you need
+// to grep after the fact (e.g. how many context messages were sent per request).
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
 
 // --- Strongly typed configuration (Options pattern) ---
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection(AppSettings.SectionName));

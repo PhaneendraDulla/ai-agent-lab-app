@@ -31,7 +31,7 @@ public sealed class GeminiLLMProvider : ILLMProvider
         // Without an API key we can't talk to Gemini, so fall back to the offline demo path.
         if (string.IsNullOrWhiteSpace(_settings.ApiKey))
         {
-            _logger.LogWarning("Gemini API key is not configured. Returning a local fallback response.");
+            _logger.LogWarning("FALLBACK: Gemini API key is not configured. Returning a local fallback response.");
             return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
 
@@ -60,7 +60,7 @@ public sealed class GeminiLLMProvider : ILLMProvider
             {
                 var errorBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning(
-                    "Gemini request failed with status {StatusCode}. Body: {Body}",
+                    "FALLBACK: Gemini request failed with status {StatusCode}. Body: {Body}",
                     (int)httpResponse.StatusCode, errorBody);
                 return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
             }
@@ -96,12 +96,12 @@ public sealed class GeminiLLMProvider : ILLMProvider
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogWarning(ex, "Gemini request failed. Returning a local fallback response.");
+            _logger.LogWarning(ex, "FALLBACK: Gemini request failed. Returning a local fallback response.");
             return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogWarning(ex, "Gemini request timed out. Returning a local fallback response.");
+            _logger.LogWarning(ex, "FALLBACK: Gemini request timed out. Returning a local fallback response.");
             return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
         }
     }

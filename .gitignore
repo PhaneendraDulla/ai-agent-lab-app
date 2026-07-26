@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Serilog rolling file output
+logs/
+
 # User-specific files
 *.rsuser
 *.suo

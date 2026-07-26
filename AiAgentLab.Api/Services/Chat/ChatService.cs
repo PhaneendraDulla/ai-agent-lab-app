@@ -41,6 +41,11 @@ public sealed class ChatService : IChatService
     {
         var conversationId = request.ConversationId ?? Guid.NewGuid().ToString();
 
+        // Marks the start of this turn's log block so MEMORY/INTENT/DECISION/TOOL
+        // lines that follow can be traced back to the question that triggered them.
+        _logger.LogInformation(
+            "REQUEST: conversation {ConversationId} — \"{Message}\"", conversationId, request.Message);
+
         // Load or create conversation (same as before)
         var conversation = await _conversationRepository.GetConversationAsync(conversationId, cancellationToken);
         if (conversation == null)
