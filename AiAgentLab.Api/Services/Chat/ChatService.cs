@@ -57,14 +57,26 @@ public sealed class ChatService : IChatService
         }
 
         var contextMessages = BuildContextWindow(conversation.Messages, maxMessages: 10);
+        _logger.LogInformation(
+            "MEMORY: loaded {Count} prior message(s) as context for conversation {ConversationId}.",
+            contextMessages.Count, conversationId);
         var intent = request.Intent ?? await ClassifyIntentAsync(request.Message, contextMessages, cancellationToken);
 
-        // Build conversation as LLM messages
+        // Build conversation as LLM messages.
+        // Start with the system prompt, then replay recent history so the model has
+        // memory of earlier turns, and finish with the current user message.
         var messages = new List<LLMMessage>
         {
-            new LLMMessage { Role = "system", Content = "You are a helpful AI assistant for learning about AI and software development." },
-            new LLMMessage { Role = "user", Content = request.Message }
+            new LLMMessage { Role = "system", Content = "You are a helpful AI assistant for learning about AI and software development." }
         };
+
+        messages.AddRange(contextMessages.Select(m => new LLMMessage
+        {
+            Role = m.Role,
+            Content = m.Content
+        }));
+
+        messages.Add(new LLMMessage { Role = "user", Content = request.Message });
 
         // Prepare tool declarations
         var toolDecls = _toolRegistry.GetToolDeclarations();

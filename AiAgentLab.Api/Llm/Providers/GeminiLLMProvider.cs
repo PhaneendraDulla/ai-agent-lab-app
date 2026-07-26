@@ -53,7 +53,17 @@ public sealed class GeminiLLMProvider : ILLMProvider
             httpRequest.Content = JsonContent.Create(body, options: _jsonOptions);
 
             using var httpResponse = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            httpResponse.EnsureSuccessStatusCode();
+
+            // Surface the real reason (e.g. 429 quota, 400 bad request, 401/403 key issues)
+            // instead of hiding every failure behind the generic "not configured" fallback.
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                var errorBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning(
+                    "Gemini request failed with status {StatusCode}. Body: {Body}",
+                    (int)httpResponse.StatusCode, errorBody);
+                return CreateFallbackResponse(BuildPrompt(request.Messages), request.Messages);
+            }
 
             var resp = await httpResponse.Content.ReadFromJsonAsync<GeminiResponse>(_jsonOptions, cancellationToken)
                 ?? throw new InvalidOperationException("Gemini returned an empty response body.");
@@ -184,9 +194,13 @@ public sealed class GeminiLLMProvider : ILLMProvider
         }
     }
 
-    private static LLMResponse CreateFallbackResponse(string prompt, IEnumerable<LLMMessage> messages)
+    private LLMResponse CreateFallbackResponse(string prompt, IEnumerable<LLMMessage> messages)
     {
-        var normalizedPrompt = prompt.ToLowerInvariant();
+        // Only the current user turn should drive the fallback's tool guess —
+        // matching against the whole prompt (history included) makes a single
+        // past date/stock question "stick" and hijack every later turn.
+        var lastUserMessage = messages.LastOrDefault(message => message.Role == "user");
+        var normalizedPrompt = (lastUserMessage?.Content ?? string.Empty).ToLowerInvariant();
         var functionMessage = messages.LastOrDefault(message => message.Role == "function");
 
         if (functionMessage is not null && !string.IsNullOrWhiteSpace(functionMessage.Content))
@@ -257,9 +271,13 @@ public sealed class GeminiLLMProvider : ILLMProvider
             };
         }
 
+        var reason = string.IsNullOrWhiteSpace(_settings.ApiKey)
+            ? "no Gemini API key is configured"
+            : "the Gemini request could not be completed (see server logs for the exact status, e.g. a 429 rate-limit/quota error)";
+
         return new LLMResponse
         {
-            Text = "Gemini is not configured in this environment, so I’m using a local fallback response. Configure an API key to enable full Gemini responses.",
+            Text = $"I’m using a local fallback response because {reason}.",
             Model = "local-fallback",
             Provider = "Gemini-Fallback"
         };
