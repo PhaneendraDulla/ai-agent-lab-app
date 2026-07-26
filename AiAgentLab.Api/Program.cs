@@ -44,9 +44,9 @@ builder.Services.AddHttpClient<GeminiLLMProvider>((serviceProvider, client) =>
 });
 
 // --- Intent Classification (abstraction for future LLM/embedding-based classification) ---
-builder.Services.AddScoped<IIntentClassifier, NoOpIntentClassifier>();
-// TODO: Swap to LLMIntentClassifier when ready:
-// builder.Services.AddScoped<IIntentClassifier, LLMIntentClassifier>();
+builder.Services.AddScoped<IIntentClassifier, LLMIntentClassifier>();
+// Swap back to NoOpIntentClassifier to disable the extra classification LLM call:
+// builder.Services.AddScoped<IIntentClassifier, NoOpIntentClassifier>();
 
 // The active provider is chosen by configuration via the factory.
 builder.Services.AddSingleton<ILLMProviderFactory, LLMProviderFactory>();

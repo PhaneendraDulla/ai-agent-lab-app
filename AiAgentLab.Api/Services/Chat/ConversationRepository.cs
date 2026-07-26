@@ -82,6 +82,9 @@ public sealed class ConversationRepository : IConversationRepository
             CreatedAt = message.CreatedAt,
             IntentDomain = message.Metadata?.GetValueOrDefault("domain"),
             IntentAction = message.Metadata?.GetValueOrDefault("action"),
+            IntentConfidence = double.TryParse(message.Metadata?.GetValueOrDefault("confidence"), out var confidence)
+                ? confidence
+                : null,
             Metadata = message.Metadata != null ? JsonSerializer.Serialize(message.Metadata) : null
         };
         _ctx.Messages.Add(entity);

@@ -44,6 +44,7 @@ public sealed class AppDbContext : DbContext
             b.Property(e => e.CreatedAt).IsRequired();
             b.Property(e => e.IntentDomain).HasMaxLength(100);
             b.Property(e => e.IntentAction).HasMaxLength(100);
+            b.Property(e => e.IntentConfidence);
             b.Property(e => e.Metadata).HasColumnType("nvarchar(max)");
             b.HasIndex(e => e.ConversationId);
         });

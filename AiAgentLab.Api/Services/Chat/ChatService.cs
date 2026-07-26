@@ -60,7 +60,7 @@ public sealed class ChatService : IChatService
         _logger.LogInformation(
             "MEMORY: loaded {Count} prior message(s) as context for conversation {ConversationId}.",
             contextMessages.Count, conversationId);
-        var intent = request.Intent ?? await ClassifyIntentAsync(request.Message, contextMessages, cancellationToken);
+        var intent = await ClassifyIntentAsync(request.Message, contextMessages, cancellationToken);
 
         // Build conversation as LLM messages.
         // Start with the system prompt, then replay recent history so the model has

@@ -14,7 +14,4 @@ public sealed record ChatRequest
 
     /// <summary>User identifier.</summary>
     public int? UserId { get; init; }
-
-    /// <summary>Optional user intent metadata for classification and analytics.</summary>
-    public Dictionary<string, string>? Intent { get; init; }
 }

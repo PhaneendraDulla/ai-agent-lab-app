@@ -20,6 +20,8 @@ public class MessageEntity
     public string? IntentDomain { get; set; }
     // Optional field for the specific action within the intent domain (e.g., "get_weather" in "weather")
     public string? IntentAction { get; set; }
+    // Optional confidence score (0.0-1.0) for the intent classification
+    public double? IntentConfidence { get; set; }
     // Optional JSON string for any additional metadata (e.g., extracted entities, confidence scores)
     public string? Metadata { get; set; }
 

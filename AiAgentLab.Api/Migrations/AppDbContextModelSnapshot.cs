@@ -68,6 +68,9 @@ namespace AiAgentLab.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<double?>("IntentConfidence")
+                        .HasColumnType("float");
+
                     b.Property<string>("Metadata")
                         .HasColumnType("nvarchar(max)");
 
