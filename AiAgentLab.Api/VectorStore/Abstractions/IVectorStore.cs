@@ -13,6 +13,12 @@ public interface IVectorStore
     /// <summary>Insert or update a chunk's vector and text.</summary>
     Task UpsertAsync(VectorChunk chunk, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Remove every chunk belonging to a document. Called before re-ingesting a document so
+    /// a shrunk document doesn't leave orphaned chunks behind from its previous, longer version.
+    /// </summary>
+    Task DeleteByDocumentNameAsync(string documentName, CancellationToken cancellationToken = default);
+
     /// <summary>Find the topK chunks most similar to queryVector, ranked by cosine similarity (highest first).</summary>
     Task<IReadOnlyList<ScoredVectorChunk>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default);
 }

@@ -65,6 +65,8 @@ public sealed class DocumentIngestionService : IDocumentIngestionService
             var text = await File.ReadAllTextAsync(filePath, cancellationToken);
             var chunks = await _chunker.ChunkAsync(text, cancellationToken);
 
+            await _vectorStore.DeleteByDocumentNameAsync(documentName, cancellationToken);
+
             _logger.LogInformation("DocumentIngestion: '{Document}' split into {ChunkCount} chunk(s).", documentName, chunks.Count);
 
             for (var i = 0; i < chunks.Count; i++)

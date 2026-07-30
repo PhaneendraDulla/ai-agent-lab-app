@@ -1,6 +1,6 @@
 # Retrieval-Augmented Generation (RAG)
 
-RAG combines a large language model with a retrieval step over your own documents.
+RAG is Retrieval-Augmented Generation . RAG combines a large language model with a retrieval step over your own documents.
 Instead of relying only on what the model learned during training, the system
 embeds a user's question, searches a vector store for the most similar chunks of
 text from a document collection, and injects those chunks into the prompt as

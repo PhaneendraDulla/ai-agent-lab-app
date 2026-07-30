@@ -71,6 +71,39 @@ public sealed class QdrantVectorStore : IVectorStore
         }
     }
 
+    public async Task DeleteByDocumentNameAsync(string documentName, CancellationToken cancellationToken = default)
+    {
+        await EnsureCollectionAsync(cancellationToken);
+
+        var body = new
+        {
+            filter = new
+            {
+                must = new object[]
+                {
+                    new { key = "documentName", match = new { value = documentName } }
+                }
+            }
+        };
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"/collections/{_settings.CollectionName}/points/delete", body, _jsonOptions, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Qdrant delete-by-document failed for '{Document}' with status {StatusCode}. Body: {Body}",
+                documentName, (int)response.StatusCode, errorBody);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "QdrantVectorStore: deleted existing chunks for document '{Document}' before re-ingestion.",
+                documentName);
+        }
+    }
+
     public async Task<IReadOnlyList<ScoredVectorChunk>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
     {
         await EnsureCollectionAsync(cancellationToken);

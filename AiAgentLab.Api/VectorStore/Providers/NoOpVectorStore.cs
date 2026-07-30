@@ -12,6 +12,8 @@ public sealed class NoOpVectorStore : IVectorStore
 
     public Task UpsertAsync(VectorChunk chunk, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+    public Task DeleteByDocumentNameAsync(string documentName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     public Task<IReadOnlyList<ScoredVectorChunk>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<ScoredVectorChunk>>(Array.Empty<ScoredVectorChunk>());
 }

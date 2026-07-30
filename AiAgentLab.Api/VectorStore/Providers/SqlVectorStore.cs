@@ -55,6 +55,20 @@ public sealed class SqlVectorStore : IVectorStore
         await _ctx.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteByDocumentNameAsync(string documentName, CancellationToken cancellationToken = default)
+    {
+        var deleted = await _ctx.VectorChunks
+            .Where(c => c.DocumentName == documentName)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (deleted > 0)
+        {
+            _logger.LogInformation(
+                "SqlVectorStore: deleted {Count} existing chunk(s) for document '{Document}' before re-ingestion.",
+                deleted, documentName);
+        }
+    }
+
     public async Task<IReadOnlyList<ScoredVectorChunk>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
     {
         var allChunks = await _ctx.VectorChunks.ToListAsync(cancellationToken);
