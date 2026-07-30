@@ -39,7 +39,7 @@ public sealed class GeminiLLMProvider : ILLMProvider
 
         // Real tool calling: send the conversation AND the tool declarations so Gemini
         // itself decides whether to call a tool or answer directly.
-        var body = BuildRequestBody(request);
+        var body = BuildRequestBody(request, _settings.Temperature);
 
         _logger.LogInformation(
             "Sending generateContent request to Gemini model {Model} with {ToolCount} tool declaration(s)",
@@ -110,7 +110,7 @@ public sealed class GeminiLLMProvider : ILLMProvider
     // Converts our neutral LLMMessage list into Gemini's structured "contents"
     // (roles user/model, functionCall, functionResponse) and attaches the tool
     // declarations so Gemini can choose to call a tool.
-    private static Dictionary<string, object?> BuildRequestBody(LLMRequest request)
+    private static Dictionary<string, object?> BuildRequestBody(LLMRequest request, double temperature)
     {
         var contents = new List<object>();
         string? systemInstruction = null;
@@ -161,7 +161,8 @@ public sealed class GeminiLLMProvider : ILLMProvider
 
         var body = new Dictionary<string, object?>
         {
-            ["contents"] = contents
+            ["contents"] = contents,
+            ["generationConfig"] = new { temperature }
         };
 
         if (request.ToolDeclarations is { Count: > 0 })

@@ -12,6 +12,7 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<ConversationEntity> Conversations => Set<ConversationEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
+    public DbSet<VectorChunkEntity> VectorChunks => Set<VectorChunkEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +48,20 @@ public sealed class AppDbContext : DbContext
             b.Property(e => e.IntentConfidence);
             b.Property(e => e.Metadata).HasColumnType("nvarchar(max)");
             b.HasIndex(e => e.ConversationId);
+        });
+
+        // VectorChunks (RAG document store)
+        modelBuilder.Entity<VectorChunkEntity>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedNever();
+            b.Property(e => e.DocumentName).IsRequired().HasMaxLength(255);
+            b.Property(e => e.ChunkIndex).IsRequired();
+            b.Property(e => e.ChunkText).IsRequired();
+            b.Property(e => e.Embedding).IsRequired().HasColumnType("nvarchar(max)");
+            b.Property(e => e.CreatedAt).IsRequired();
+            b.Property(e => e.UpdatedAt).IsRequired();
+            b.HasIndex(e => e.DocumentName);
         });
     }
 }

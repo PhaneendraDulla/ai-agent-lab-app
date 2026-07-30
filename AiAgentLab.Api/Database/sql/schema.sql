@@ -30,6 +30,7 @@ IF OBJECT_ID('dbo.GetUserConversations',          'P') IS NOT NULL DROP PROCEDUR
 GO
 
 IF OBJECT_ID('dbo.MessageEmbeddings', 'U') IS NOT NULL DROP TABLE dbo.MessageEmbeddings;
+IF OBJECT_ID('dbo.VectorChunks',      'U') IS NOT NULL DROP TABLE dbo.VectorChunks;
 IF OBJECT_ID('dbo.ConversationTags',  'U') IS NOT NULL DROP TABLE dbo.ConversationTags;
 IF OBJECT_ID('dbo.Messages',          'U') IS NOT NULL DROP TABLE dbo.Messages;
 IF OBJECT_ID('dbo.Conversations',     'U') IS NOT NULL DROP TABLE dbo.Conversations;
@@ -136,6 +137,32 @@ CREATE TABLE dbo.MessageEmbeddings
 CREATE INDEX IX_MessageEmbeddings_MessageId ON dbo.MessageEmbeddings (MessageId);
 
 PRINT 'Table dbo.MessageEmbeddings created.';
+GO
+
+-- ============================================================
+--  6a. VECTOR CHUNKS  (RAG document store - Milestone 2)
+--      Backs the SQL vector-store implementation: one row per
+--      embedded chunk of an ingested .txt/.md document. Embedding
+--      is stored as a JSON array of floats (e.g. "[0.123,0.456,...]")
+--      and similarity is computed brute-force in application code —
+--      simple and readable, not optimized for scale.
+-- ============================================================
+CREATE TABLE dbo.VectorChunks
+(
+    Id           NVARCHAR(450)   NOT NULL,
+    DocumentName NVARCHAR(255)   NOT NULL,
+    ChunkIndex   INT             NOT NULL,
+    ChunkText    NVARCHAR(MAX)   NOT NULL,
+    Embedding    NVARCHAR(MAX)   NOT NULL,
+    CreatedAt    DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt    DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_VectorChunks PRIMARY KEY (Id)
+);
+
+CREATE INDEX IX_VectorChunks_DocumentName ON dbo.VectorChunks (DocumentName);
+
+PRINT 'Table dbo.VectorChunks created.';
 GO
 
 -- ============================================================
@@ -293,6 +320,7 @@ SELECT * FROM dbo.Users;
 SELECT * FROM dbo.Conversations;
 SELECT * FROM dbo.ConversationTags;
 SELECT * FROM dbo.MessageEmbeddings;
+SELECT * FROM dbo.VectorChunks;
 SELECT * FROM dbo.Messages ;
 
 

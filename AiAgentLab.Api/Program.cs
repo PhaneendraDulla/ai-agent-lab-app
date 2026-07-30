@@ -1,11 +1,18 @@
 using AiAgentLab.Api.Core.Configuration;
 using AiAgentLab.Api.Core.Logging;
+using AiAgentLab.Api.Embeddings.Abstractions;
+using AiAgentLab.Api.Embeddings.Factory;
+using AiAgentLab.Api.Embeddings.Providers;
 using AiAgentLab.Api.Llm.Abstractions;
 using AiAgentLab.Api.Llm.Factory;
 using AiAgentLab.Api.Llm.Providers;
 using AiAgentLab.Api.Services.Chat;
+using AiAgentLab.Api.Services.Documents;
 using AiAgentLab.Api.Data;
 using AiAgentLab.Api.Tools;
+using AiAgentLab.Api.VectorStore.Abstractions;
+using AiAgentLab.Api.VectorStore.Factory;
+using AiAgentLab.Api.VectorStore.Providers;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -27,6 +34,9 @@ builder.Services.Configure<LlmSettings>(builder.Configuration.GetSection(LlmSett
 builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
 builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection(GeminiSettings.SectionName));
 builder.Services.Configure<FinnhubSettings>(builder.Configuration.GetSection(FinnhubSettings.SectionName));
+builder.Services.Configure<VectorStoreSettings>(builder.Configuration.GetSection(VectorStoreSettings.SectionName));
+builder.Services.Configure<QdrantSettings>(builder.Configuration.GetSection(QdrantSettings.SectionName));
+builder.Services.Configure<DocumentIngestionSettings>(builder.Configuration.GetSection(DocumentIngestionSettings.SectionName));
 
 // --- Database (SQL Server via EF Core) ---
 var connectionString = builder.Configuration.GetConnectionString("AiAgentLab")
@@ -52,6 +62,34 @@ builder.Services.AddHttpClient<GeminiLLMProvider>((serviceProvider, client) =>
     client.BaseAddress = new Uri(settings.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
 });
+
+// --- Embedding providers (RAG) ---
+// Gemini is the only implementation today; the factory seam lets us add more later.
+builder.Services.AddHttpClient<GeminiEmbeddingProvider>((serviceProvider, client) =>
+{
+    var settings = serviceProvider.GetRequiredService<IOptions<GeminiSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+});
+builder.Services.AddScoped<IEmbeddingProviderFactory, EmbeddingProviderFactory>();
+builder.Services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<IEmbeddingProviderFactory>().Create());
+
+// --- Vector store (RAG) ---
+// Sql is the zero-infrastructure default; Qdrant is a REST-based skeleton, selectable
+// once a Qdrant server is running (see VectorStore:Provider in appsettings).
+builder.Services.AddScoped<SqlVectorStore>();
+builder.Services.AddHttpClient<QdrantVectorStore>((serviceProvider, client) =>
+{
+    var settings = serviceProvider.GetRequiredService<IOptions<QdrantSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+});
+builder.Services.AddScoped<IVectorStoreFactory, VectorStoreFactory>();
+builder.Services.AddScoped<IVectorStore>(sp => sp.GetRequiredService<IVectorStoreFactory>().Create());
+
+// --- Document ingestion (RAG) ---
+builder.Services.AddScoped<DocumentChunker>();
+builder.Services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
 
 // --- Intent Classification (abstraction for future LLM/embedding-based classification) ---
 builder.Services.AddScoped<IIntentClassifier, LLMIntentClassifier>();

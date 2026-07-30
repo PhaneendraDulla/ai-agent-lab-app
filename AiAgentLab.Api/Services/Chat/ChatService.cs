@@ -1,7 +1,13 @@
+using AiAgentLab.Api.Core.Configuration;
+using AiAgentLab.Api.Embeddings.Abstractions;
+using AiAgentLab.Api.Embeddings.Providers;
 using AiAgentLab.Api.Llm.Abstractions;
 using AiAgentLab.Api.Models.Chat;
 using AiAgentLab.Api.Tools;
+using AiAgentLab.Api.VectorStore.Abstractions;
+using AiAgentLab.Api.VectorStore.Providers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace AiAgentLab.Api.Services.Chat;
@@ -12,6 +18,9 @@ public sealed class ChatService : IChatService
     private readonly IConversationRepository _conversationRepository;
     private readonly IIntentClassifier _intentClassifier;
     private readonly IToolRegistry _toolRegistry;
+    private readonly IEmbeddingProvider _embeddingProvider;
+    private readonly IVectorStore _vectorStore;
+    private readonly VectorStoreSettings _vectorStoreSettings;
     private readonly ILogger<ChatService> _logger;
 
     private const int MaxToolIterations = 5;
@@ -21,6 +30,9 @@ public sealed class ChatService : IChatService
         IConversationRepository conversationRepository,
         IIntentClassifier intentClassifier,
         IToolRegistry toolRegistry,
+        IEmbeddingProvider embeddingProvider,
+        IVectorStore vectorStore,
+        IOptions<VectorStoreSettings> vectorStoreSettings,
         ILogger<ChatService> logger
     )
     {
@@ -28,12 +40,24 @@ public sealed class ChatService : IChatService
         _conversationRepository = conversationRepository;
         _intentClassifier = intentClassifier;
         _toolRegistry = toolRegistry;
+        _embeddingProvider = embeddingProvider;
+        _vectorStore = vectorStore;
+        _vectorStoreSettings = vectorStoreSettings.Value;
         _logger = logger;
     }
 
-    // Backwards-compatible constructor for tests and callers that don't provide a ToolRegistry or logger.
+    // Backwards-compatible constructor for tests and callers that don't provide a
+    // ToolRegistry, RAG dependencies, or logger — RAG retrieval becomes a no-op.
     public ChatService(ILLMProvider llmProvider, IConversationRepository conversationRepository, IIntentClassifier intentClassifier)
-        : this(llmProvider, conversationRepository, intentClassifier, new NoOpToolRegistry(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatService>.Instance)
+        : this(
+            llmProvider,
+            conversationRepository,
+            intentClassifier,
+            new NoOpToolRegistry(),
+            new NoOpEmbeddingProvider(),
+            new NoOpVectorStore(),
+            Options.Create(new VectorStoreSettings()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatService>.Instance)
     {
     }
 
@@ -66,13 +90,20 @@ public sealed class ChatService : IChatService
             "MEMORY: loaded {Count} prior message(s) as context for conversation {ConversationId}.",
             contextMessages.Count, conversationId);
         var intent = await ClassifyIntentAsync(request.Message, contextMessages, cancellationToken);
+        var ragContext = await RetrieveRagContextAsync(request.Message, conversationId, cancellationToken);
 
         // Build conversation as LLM messages.
         // Start with the system prompt, then replay recent history so the model has
         // memory of earlier turns, and finish with the current user message.
+        var systemPrompt = "You are a helpful AI assistant for learning about AI and software development.";
+        if (!string.IsNullOrWhiteSpace(ragContext))
+        {
+            systemPrompt += $"\n\nRelevant context:\n{ragContext}";
+        }
+
         var messages = new List<LLMMessage>
         {
-            new LLMMessage { Role = "system", Content = "You are a helpful AI assistant for learning about AI and software development." }
+            new LLMMessage { Role = "system", Content = systemPrompt }
         };
 
         messages.AddRange(contextMessages.Select(m => new LLMMessage
@@ -226,6 +257,57 @@ public sealed class ChatService : IChatService
             ConversationId = conversationId,
             MessageId = Guid.NewGuid().ToString()
         };
+    }
+
+    // Embeds the user's message and retrieves the top-K most similar chunks from the
+    // vector store, formatted for injection into the system prompt. Retrieval failures
+    // (e.g. an embedding API hiccup) are logged and swallowed rather than failing the
+    // whole chat turn — RAG context is an enhancement, not a hard dependency of chat.
+    private async Task<string?> RetrieveRagContextAsync(string message, string conversationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var embedding = await _embeddingProvider.EmbedAsync(new EmbeddingRequest { Text = message }, cancellationToken);
+            if (embedding.Vector.Length == 0)
+                return null;
+
+            var results = await _vectorStore.SearchAsync(embedding.Vector, _vectorStoreSettings.TopK, cancellationToken);
+
+            // TEMP DEBUG (remove once RAG tuning is done): dump every candidate chunk and
+            // its cosine similarity score to the query, before the MinScore filter runs.
+            for (var i = 0; i < results.Count; i++)
+            {
+                var r = results[i];
+                var preview = r.Chunk.Text.Length > 120 ? r.Chunk.Text[..120] + "..." : r.Chunk.Text;
+                _logger.LogInformation(
+                    "RAG DEBUG: candidate #{Rank} — [{Document} #{ChunkIndex}] score={Score:F4} text=\"{Preview}\"",
+                    i + 1, r.Chunk.DocumentName, r.Chunk.ChunkIndex, r.Score, preview);
+            }
+
+            var relevant = results.Where(r => r.Score >= _vectorStoreSettings.MinScore).ToList();
+            if (relevant.Count == 0)
+            {
+                _logger.LogInformation(
+                    "RAG: {Total} chunk(s) retrieved but none met the {MinScore} similarity threshold for conversation {ConversationId}.",
+                    results.Count, _vectorStoreSettings.MinScore, conversationId);
+                return null;
+            }
+
+            results = relevant;
+
+            _logger.LogInformation(
+                "RAG: retrieved {Count} chunk(s) above the {MinScore} threshold for conversation {ConversationId}.",
+                results.Count, _vectorStoreSettings.MinScore, conversationId);
+
+            return string.Join(
+                "\n\n",
+                results.Select(r => $"[{r.Chunk.DocumentName} #{r.Chunk.ChunkIndex}]\n{r.Chunk.Text}"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RAG: retrieval failed for conversation {ConversationId}; continuing without context.", conversationId);
+            return null;
+        }
     }
 
     // ... keep ClassifyIntentAsync and BuildContextWindow methods unchanged (copy from existing)
